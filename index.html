@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>連続正解継続ゲーム</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    /*--- ベーススタイル ---*/
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: "Segoe UI", sans-serif;
+      background: #1f1f1f; /* 背景: ダーク */
+      color: #ffffff;      /* 文字: 白 */
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.8em;
+      margin-bottom: 0.3em;
+    }
+
+    /*--- ボタン数選択フォーム（セットアップエリア） ---*/
+    .setup-area {
+      margin: 1em auto;
+      max-width: 500px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid #ffffff;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .setup-area p {
+      margin-top: 0;
+    }
+    .setup-area label {
+      display: inline-block;
+      margin: 0.4em;
+      cursor: pointer;
+    }
+    .setup-area input[type="radio"] {
+      margin-right: 0.4em;
+      transform: scale(1.2);
+      cursor: pointer;
+    }
+    .setup-area button {
+      margin-top: 1em;
+      font-size: 1em;
+      padding: 0.6em 1.2em;
+      cursor: pointer;
+      border: 2px solid #fff;
+      background: #333;
+      color: #fff;
+      border-radius: 5px;
+      transition: background 0.3s, transform 0.1s;
+    }
+    .setup-area button:hover {
+      background: #666;
+      transform: translateY(-2px);
+    }
+
+    /*--- ゲームエリア（プレイ画面） ---*/
+    .game-area {
+      margin: 1em auto;
+      max-width: 600px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid #ffffff;
+      border-radius: 8px;
+      padding: 20px;
+      display: none; /* 初期は非表示 */
+    }
+
+    /* ステータス表示 */
+    .status-area {
+      margin-bottom: 1em;
+    }
+    .status-area div {
+      margin: 5px 0;
+    }
+    .highlight {
+      font-weight: bold;
+      color: #ff3e3e; /* めだつ赤 */
+    }
+
+    /*--- ボタン群コンテナ ---*/
+    .button-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    /*--- ゲームボタンの見た目をかっこよく ---*/
+    .game-btn {
+      font-size: 1em;
+      padding: 0.7em 1em;
+      cursor: pointer;
+      border: 3px solid #fff;
+      background: linear-gradient(135deg, #444, #111);
+      color: #fff;
+      border-radius: 8px;
+      transition: transform 0.2s, box-shadow 0.3s, background 0.3s;
+      min-width: 110px;
+      position: relative;
+      overflow: hidden; /* 内部の疑似要素アニメを隠す */
+    }
+    .game-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(255,255,255,0.3);
+    }
+
+    /*--- 正解（緑）の光る演出 ---*/
+    .correct-glow {
+      animation: correctGlow 0.7s forwards;
+    }
+    @keyframes correctGlow {
+      0%   { box-shadow: 0 0 0px #0f0; }
+      100% { box-shadow: 0 0 30px #0f0; }
+    }
+
+    /*--- 爆発演出（不正解）---*/
+    .explosion {
+      animation: explosion 2.5s forwards ease-in-out; /* 時間を2.5秒に延長 */
+      pointer-events: none; /* 爆発後もクリック不可 */
+    }
+    @keyframes explosion {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 0 0px 0 #f00;
+      }
+      20% {
+        transform: scale(1.2);
+        box-shadow: 0 0 20px 10px red;
+      }
+      40% {
+        transform: scale(1.5);
+        box-shadow: 0 0 40px 20px orange;
+      }
+      60% {
+        transform: scale(1.8);
+        box-shadow: 0 0 60px 30px yellow;
+        background: #660000;
+        border-color: #999;
+      }
+      80% {
+        transform: scale(2);
+        box-shadow: 0 0 80px 40px #ff9900;
+      }
+      100% {
+        transform: scale(2.3);
+        box-shadow: 0 0 100px 50px #ff9900;
+        /* 最終的に燃え残ったような見た目で止まる */
+        background: #660000;
+        border-color: #999;
+      }
+    }
+
+    /*--- 不正解ボタンを揺らす演出（正解を当てた後）---*/
+    .shake {
+      animation: shake 0.9s ease-in-out; /* 0.9秒に延長 */
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-10px); }
+      40%, 80% { transform: translateX(10px); }
+    }
+
+    /* ボタンにホバー時のパーティクル風エフェクト */
+    .game-btn::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at center, rgba(255,255,255,0.3) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.4s, transform 0.4s;
+      pointer-events: none;
+    }
+    .game-btn:hover::before {
+      opacity: 0.3;
+      transform: scale(1.1);
+    }
+
+    /* リセットボタン */
+    #resetBtn {
+      margin-top: 1em;
+      font-size: 1.1em;
+      padding: 0.6em 1.2em;
+      cursor: pointer;
+      border: 3px solid #fff;
+      color: #fff;
+      background: #444;
+      border-radius: 8px;
+      transition: background 0.3s, transform 0.1s;
+    }
+    #resetBtn:hover {
+      background: #666;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <h1>連続正解継続ゲーム</h1>
+
+  <!-- ボタン数を選択するセットアップ領域 -->
+  <div class="setup-area" id="setup-area">
+    <p>
+      このゲームは「不正解が1つ」だけあり、それ以外は正解。<br>
+      不正解を選ぶと爆発が起こり、リセットするまでそのまま！<br>
+      正解を選んだときは、不正解ボタンが揺れます。<br>
+      何連続正解できるか挑戦してみよう！
+    </p>
+    <p>
+      ボタン数を選んでください（2～10）。<br>
+      未選択ならデフォルトで3個（正解率 約66.7%）になります。
+    </p>
+    <!-- ラジオボタンを動的に生成 → 2～10それぞれ正解確率を表示 -->
+    <div id="radioContainer"></div>
+
+    <button id="startGameBtn">ゲーム開始</button>
+  </div>
+
+  <!-- ゲームエリア（プレイ画面） -->
+  <div class="game-area" id="game-area">
+    <!-- ステータス表示 -->
+    <div class="status-area">
+      <div>現在の連続正解数: <span id="current-streak">0</span></div>
+      <div>最高連続正解数: <span id="max-streak">0</span></div>
+      <div id="message">ボタンを選択してください。</div>
+    </div>
+
+    <!-- ボタン群を配置する場所 -->
+    <div class="button-container" id="button-container"></div>
+
+    <!-- リセットボタン -->
+    <button id="resetBtn">リセット</button>
+  </div>
+
+  <script>
+    // --- DOM取得 ---
+    const setupArea = document.getElementById("setup-area");
+    const startGameBtn = document.getElementById("startGameBtn");
+    const radioContainer = document.getElementById("radioContainer");
+
+    const gameArea = document.getElementById("game-area");
+    const buttonContainer = document.getElementById("button-container");
+    const messageEl = document.getElementById("message");
+    const currentStreakEl = document.getElementById("current-streak");
+    const maxStreakEl = document.getElementById("max-streak");
+    const resetBtn = document.getElementById("resetBtn");
+
+    // ====================
+    // 連続正解数管理
+    // ====================
+    let currentStreak = 0;
+    let maxStreak = 0;
+
+    // ====================
+    // 選択されたボタン数
+    // ====================
+    let totalButtons = 3; // デフォルト3
+
+    // 不正解が1つ・残りが正解 → answers配列
+    let answers = [];
+
+    // ゲームが終了しているか
+    let isGameOver = false;
+
+    // ================================
+    // 複数の"テーマ"の名前セット
+    // ================================
+    const nameSets = [
+      // 1) 動物
+      ["ネコ", "イヌ", "ライオン", "ゾウ", "カピバラ", "パンダ", "タヌキ", "トラ", "キリン", "ペンギン"],
+      // 2) 中二病アイテム
+      ["魔王の右腕", "漆黒の羽", "虚無の書", "闇炎の指輪", "封印の大鎌", "堕天の鏡", "深淵の眼", "暗黒の呪符", "虚空の鈴", "地獄の火柱"],
+      // 3) 惑星
+      ["水星", "金星", "地球", "火星", "木星", "土星", "天王星", "海王星", "冥王星", "小惑星ベルト"],
+      // 4) 干支（十二支のうち10）
+      ["子（ね）", "丑（うし）", "寅（とら）", "卯（う）", "辰（たつ）", "巳（み）", "午（うま）", "未（ひつじ）", "申（さる）", "酉（とり）"],
+      // 5) 星座（12星座のうち10）
+      ["牡羊座", "牡牛座", "双子座", "蟹座", "獅子座", "乙女座", "天秤座", "蠍座", "射手座", "山羊座"],
+      // 6) アルファベット(先頭10文字)
+      ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+      // 7) ワンピースキャラ
+      ["ルフィ", "ゾロ", "ナミ", "ウソップ", "サンジ", "チョッパー", "ロビン", "フランキー", "ブルック", "ジンベエ"],
+      // 8) ハンターハンターキャラ
+      ["ゴン", "キルア", "クラピカ", "レオリオ", "ヒソカ", "イルミ", "ネテロ", "メルエム", "ネフェルピトー", "ビスケ"],
+      // 9) ファンタジー風アイテム
+      ["魔法の壺", "勇者の剣", "聖なる杯", "ドラゴンの卵", "黄金のりんご", "深淵の鍵", "賢者の石", "封印の巻物", "妖精の粉", "不死鳥の羽"],
+      // 10) ミステリー風キーワード
+      ["暗号", "黒幕", "未解決事件", "怪盗X", "密室", "消えた証拠", "嘘発見器", "トリック", "共犯者", "謎の暗号文"]
+    ];
+
+    // =========================
+    // 1) ページ読み込み時: ラジオボタン生成
+    // =========================
+    window.addEventListener("DOMContentLoaded", () => {
+      createRadioButtons();
+    });
+
+    function createRadioButtons() {
+      // 2～10 のボタン数それぞれについてラジオボタンを生成
+      // 正解確率 = (個数-1)/個数
+      let html = "";
+      for (let n = 2; n <= 10; n++) {
+        const probability = ((n - 1) / n * 100).toFixed(1); 
+        html += `
+          <label>
+            <input type="radio" name="btnCount" value="${n}">
+            ${n}個 (正解率 ${probability}%)
+          </label>
+        `;
+      }
+      radioContainer.innerHTML = html;
+    }
+
+    // ======================
+    // 2) ゲーム開始ボタン
+    // ======================
+    startGameBtn.addEventListener("click", () => {
+      // 選択されたラジオボタンを取得
+      const selectedRB = document.querySelector('input[name="btnCount"]:checked');
+      let selectedValue = null;
+      if (selectedRB) {
+        selectedValue = selectedRB.value;
+      }
+      // 未選択なら3
+      if(!selectedValue) {
+        selectedValue = 3;
+      }
+      totalButtons = parseInt(selectedValue, 10);
+
+      // セットアップを隠し、ゲーム画面を表示
+      setupArea.style.display = "none";
+      gameArea.style.display = "block";
+
+      initGame();
+    });
+
+    // =====================
+    // 3) ゲーム初期化
+    // =====================
+    function initGame() {
+      currentStreak = 0;
+      isGameOver = false;
+      messageEl.textContent = "ボタンを選択してください。";
+      updateStreakDisplay();
+
+      // ボタンを生成
+      createButtons(totalButtons);
+      // ラウンド開始
+      newRound();
+    }
+
+    // =====================
+    // 4) 新しいラウンド
+    // =====================
+    function newRound() {
+      // 全部trueで埋めてから 不正解1つだけfalseにする
+      answers = new Array(totalButtons).fill(true);
+      const wrongIndex = Math.floor(Math.random() * totalButtons);
+      answers[wrongIndex] = false;
+
+      // ボタンの見た目をリセット
+      const btns = buttonContainer.querySelectorAll(".game-btn");
+      btns.forEach(btn => {
+        btn.classList.remove("correct-glow", "explosion", "shake");
+        btn.style.boxShadow = "none";
+        btn.disabled = false;
+      });
+    }
+
+    // =====================
+    // 5) ボタン生成 (テーマをランダムに選ぶ)
+    // =====================
+    function createButtons(count) {
+      buttonContainer.innerHTML = "";
+
+      // nameSets の中から1セットをランダムに選ぶ
+      const randomSetIndex = Math.floor(Math.random() * nameSets.length);
+      const chosenSet = nameSets[randomSetIndex];
+
+      // chosenSet から必要な数だけ取り出す
+      const slicedNames = chosenSet.slice(0, count);
+
+      for (let i = 0; i < count; i++) {
+        let btnName = "";
+        if (i < slicedNames.length) {
+          btnName = slicedNames[i];
+        } else {
+          // 足りないときのフォールバック
+          btnName = `NoName${i+1}`;
+        }
+
+        const btn = document.createElement("button");
+        btn.textContent = btnName;
+        btn.classList.add("game-btn");
+        btn.addEventListener("click", () => handleClick(i, btn));
+        buttonContainer.appendChild(btn);
+      }
+    }
+
+    // =====================
+    // 6) ボタンクリック時
+    // =====================
+    function handleClick(index, btnElement) {
+      if(isGameOver) return;
+
+      // 不正解か？
+      if(!answers[index]) {
+        // 爆発（2.5sアニメ）
+        btnElement.classList.add("explosion");
+        messageEl.innerHTML = `<span class="highlight">ゲームオーバー！</span> 連続正解数は ${currentStreak} でした。`;
+        isGameOver = true;
+
+        // 他ボタンも押せないようにする
+        const allBtns = buttonContainer.querySelectorAll(".game-btn");
+        allBtns.forEach(b => b.disabled = true);
+
+      } else {
+        // 正解（緑）
+        btnElement.classList.add("correct-glow");
+        currentStreak++;
+        if(currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+        }
+        updateStreakDisplay();
+        messageEl.textContent = "正解！不正解ボタンが揺れます...";
+
+        // 不正解ボタンを探して揺らす
+        const wrongIndex = answers.indexOf(false);
+        const allBtns = buttonContainer.querySelectorAll(".game-btn");
+        const wrongBtn = allBtns[wrongIndex];
+        wrongBtn.classList.add("shake");
+
+        // 一定時間後に次ラウンド
+        setTimeout(() => {
+          newRound();
+          messageEl.textContent = "ボタンを選択してください。";
+        }, 1200);
+      }
+    }
+
+    // =====================
+    // 7) スコア表示更新
+    // =====================
+    function updateStreakDisplay() {
+      currentStreakEl.textContent = currentStreak;
+      maxStreakEl.textContent = maxStreak;
+    }
+
+    // ======================
+    // 8) リセットボタン
+    // ======================
+    resetBtn.addEventListener("click", () => {
+      currentStreak = 0;
+      initGame();
+    });
+  </script>
+</body>
+</html>
